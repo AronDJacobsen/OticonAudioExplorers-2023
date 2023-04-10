@@ -1,0 +1,11 @@
+# Local package 
+-e .
+
+# Other dependencies
+numpy
+pandas
+pathlib2
+jupyter
+matplotlib
+seaborn
+tqdm
