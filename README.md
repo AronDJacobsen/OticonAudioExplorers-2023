@@ -19,6 +19,13 @@ Install the dependencies:
 pip install -r requirements.txt
 ```
 
+#### GPU - PyTorch installation
+
+The code in this repository have been run with the following `torch`-version:
+```
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu116
+```
+
 ## Project Organization
 ------------
 
