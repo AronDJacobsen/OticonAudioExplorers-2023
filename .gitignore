@@ -114,3 +114,5 @@ dtu_mlops/
 
 # html
 *.html
+*.mat
+*.npy
