@@ -48,7 +48,7 @@ pip3 install torch torchvision torchaudio --index-url https://download.pytorch.o
     │   ├── models                  <- Scripts to define and train models
     │   |   └── __init__.py
     │   │
-    │   └── models                  <- Scripts to evaluate model performance
+    │   └── evaluation              <- Scripts to evaluate model performance
     │       └── __init__.py      
     │        
     ├── .gitignore                  <- gitignore file
