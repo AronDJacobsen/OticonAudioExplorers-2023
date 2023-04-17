@@ -10,3 +10,6 @@ matplotlib
 seaborn
 scikit-learn
 tqdm
+
+# OS metrics
+codecarbon
