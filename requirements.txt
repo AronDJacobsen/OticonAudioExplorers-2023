@@ -1,15 +1,21 @@
 # Local package 
 -e .
 
-# Other dependencies
+# Computational essential
 numpy
 pandas
+scikit-learn
+
+# Other dependencies
 pathlib2
 jupyter
-matplotlib
-seaborn
-scikit-learn
 tqdm
 
-# OS metrics
+# Figures
+plotly
+matplotlib
+seaborn
+
+# Metrics and logging
 codecarbon
+tensorboard

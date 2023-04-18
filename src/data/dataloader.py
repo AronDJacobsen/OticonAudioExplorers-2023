@@ -1,81 +1,82 @@
-# from typing import Optional
+from pathlib import Path
+import numpy as np
 
-# from pathlib import Path
+import torch
+from torch.utils.data import Dataset
 
-# import torch
-# from torch.utils.data import Dataset
-# import numpy as np
+from .utils import downsample, standardize
 
-# class CatalanJuvenileJustice(Dataset):
+class OticonAudioExplorers(Dataset):
     
-#     def __init__(
-#         self,
-#         data_path: str,
-#     ):
-#         # Create as Path-object
-#         self.data_path = Path(data_path)
+    def __init__(self, data, labels):
+        self.data      = torch.tensor(data).unsqueeze(1)
+        self.labels    = torch.tensor(labels)
+                
+        # Define number of classes
+        self.n_classes = np.unique(self.labels).__len__()
 
-#         # Load processed data-file
-#         datafile = torch.load(self.data_path)
+    def __len__(self):
+        return len(self.data)
 
-#         # Extract data
-#         self.columns = datafile['data']['columns']
-#         self.data = torch.FloatTensor(datafile['data']['content'])
+    def __getitem__(self, item):
+        return {
+            "data":  self.data[item, :], 
+            "label": self.labels[item], 
+        }
+    
 
-#         self.sensitive_attributes = datafile['sensitive_attributes']['name']
-#         self.sensitive_data = torch.FloatTensor(datafile['sensitive_attributes']['content'])
+def get_loaders(
+        data_path: str = '../data', 
+        balancing_strategy: str = 'downsample', 
+        batch_size: int = 32,
+        shuffle: bool = True,
+        val_size: float = 0.2,
+        seed: int = 0
+    ):
 
-#         # Extract labels
-#         self.target_name = datafile['labels']['name']
-#         self.labels = torch.LongTensor(datafile['labels']['content'])
+    # Set seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    
+    # Load dataset files
+    data_path       = Path(data_path)
+    train_data      = np.load(data_path / 'raw/npy/training.npy')
+    train_labels    = np.load(data_path / 'raw/npy/training_labels.npy')
+    
+    # Load test data
+    Xtest           = np.load(data_path / 'raw/npy/test.npy')
+    ttest           = np.nan * np.ones(Xtest.shape[0])    
+    
+    # Get split indices
+    train_idxs  = np.random.choice(np.arange(train_data.__len__()), size=int(train_data.__len__() * (1-val_size)), replace=False)
+    val_idxs    = np.setdiff1d(np.arange(train_data.__len__()), train_idxs)
+    assert train_data.__len__() == train_idxs.__len__() + val_idxs.__len__()
 
-#         # Define number of classes and points
-#         self.n_classes = self.labels.unique().__len__()
-#         self.n_points, self.n_attributes = self.data.shape
+    # Split data set
+    Xtrain, Xval = train_data[train_idxs, :, :], train_data[val_idxs, :, :]
+    ttrain, tval = train_labels[train_idxs],     train_labels[val_idxs]
 
-#     def getColumns(self):
-#         return self.columns
-
-#     def __len__(self):
-#         return len(self.data)
-
-#     def __getitem__(self, item):
-#         return {
-#             "data": self.data[item, :], 
-#             "label": self.labels[item], 
-#             "sensitive_data": self.sensitive_data[item, :]
-#         }
-
-#     def get_loaders(
-#         self,
-#         batch_size: int,
-#         shuffle: bool,
-#         num_workers: int = 1,
-#         test_size: float = 0.2,
-#         val_size: float = 0.2,
-#         split_type: Optional[str] = None,
-#     ):
-
-#         if split_type is None:
-#             return torch.utils.data.DataLoader(
-#                 self,
-#                 batch_size=batch_size,
-#                 shuffle=shuffle,
-#                 num_workers=num_workers,
-#             )
-
-#         elif split_type == 'random':
-#             train_size = np.round((1 - test_size) * (1 - val_size), 5)
-#             val_size = np.round((1 - test_size) * val_size, 5)
-#             assert np.allclose(train_size + val_size, 1 - test_size), "Proportions of the random split does not add up..."
-
-#             train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(self, [train_size, val_size, test_size])
-#             return [
-#                 torch.utils.data.DataLoader(
-#                     dataset_,
-#                     batch_size=batch_size,
-#                     shuffle=shuffle,
-#                     num_workers=num_workers,
-#                 )
-#                 for dataset_ in [train_dataset, val_dataset, test_dataset]
-#             ]
+    if balancing_strategy == 'downsample':
+        Xtrain, ttrain = downsample(Xtrain, ttrain)
+    else:
+        raise NotImplementedError("Not yet implemented...")
+    
+    # Standardize data
+    Xtrain, mu, sigma   = standardize(Xtrain, dtype='train')
+    Xval, _, _          = standardize(Xval, dtype='validation', mu=mu, sigma=sigma)
+    Xtest, _, _         = standardize(Xtest, dtype='test', mu=mu, sigma=sigma)
+    
+    # Creating datasets
+    train_dataset   = OticonAudioExplorers(Xtrain, ttrain)
+    val_dataset     = OticonAudioExplorers(Xval, tval)
+    test_dataset    = OticonAudioExplorers(Xtest, ttest)
+    
+    # Initializing loaders
+    return {
+        name_: torch.utils.data.DataLoader(
+            dataset_, 
+            batch_size=batch_size, 
+            shuffle=shuffle
+        )
+        for name_, dataset_ in {'train': train_dataset, 'val': val_dataset, 'test': test_dataset}.items()
+    }
