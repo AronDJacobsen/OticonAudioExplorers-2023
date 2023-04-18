@@ -26,6 +26,7 @@ def train(
     checkpoint_every_epoch: int = 1,
     visualize_every_epoch: int = 5,
     lr: float = 1e-3,
+    lambda_: float = 0.5,
     batch_size: int = 128,
     balancing_strategy: str = 'downsample',
     val_size: float = 0.2,
@@ -50,7 +51,7 @@ def train(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Get dataloaders
-    loaders = get_loaders(
+    loaders, mu, sigma = get_loaders(
         data_path = data_path, 
         balancing_strategy = balancing_strategy, 
         batch_size = batch_size,
@@ -60,7 +61,7 @@ def train(
     )
     
     # Get model, optimizer and criterion
-    model, optimizer, criterion = get_model(device, lr = 1e-3)
+    model, optimizer, recon_criterion, predictive_criterion = get_model(model_name=model_name, lr=lr, device=device)
     
     # Initialize loss storage and other
     current_best_loss = np.inf
@@ -94,57 +95,84 @@ def train(
                 fig.suptitle(f"EPOCH {epoch}")
                 plt.tight_layout()
                 plt.savefig(f'{figure_path}/reconstructions/{experiment_name}/epoch{epoch}.png')
+                plt.close()
 
             # Initialize training epoch
-            running_loss_train, running_loss_val = 0, 0    
+            running_loss_train, running_loss_val        = 0, 0
+            running_MSELoss_train, running_MSELoss_val  = 0, 0    
+            running_CELoss_train, running_CELoss_val    = 0, 0   
+            running_acc_train, running_acc_val          = 0, 0 
+
             model.train()
-            
-            # Train on batches
             for batch in iter(loaders['train']):
                 
                 # Get data
-                x = batch['data'].to(device)
+                x       = batch['data'].to(device)
+                targets = batch['label'].to(device).to(torch.long)
 
                 # Reset parameter gradients
                 optimizer.zero_grad()
 
-                # Get reconstruction
-                x_recon = model(x)['x_recon']
-                
+                # Get model outputs
+                outputs = model(x)               
+
                 # Compute loss and backpropagate gradient for update
-                train_loss = criterion(x_recon, x)
+                recon_loss      = recon_criterion(outputs['x_recon'], x)
+                predictive_loss = predictive_criterion(outputs['t_logits'], targets)
+
+                train_loss = (1 - lambda_) * recon_loss + lambda_ * predictive_loss
                 train_loss.backward()
                 optimizer.step()
 
                 # Add the mini-batch training loss to epoch loss
                 running_loss_train += train_loss.item()
-                
-            # Compute the epoch training loss
-            running_loss_train = running_loss_train / Ntrain
+                running_MSELoss_train += recon_loss.item()
+                running_CELoss_train += predictive_loss.item()
 
+                # Compute accuracy
+                preds = outputs['t_logits'].detach().argmax(axis=1)
+                equals = preds.cpu().numpy() == targets.cpu().numpy()
+                running_acc_train += equals.mean()
+                
             # Evaluation
             model.eval()
             with torch.no_grad():
                 for batch in iter(loaders['val']):
                     
                     # Get data
-                    x = batch['data'].to(device)
-                    # Get reconstruction
-                    x_recon = model(x)['x_recon']
+                    x       = batch['data'].to(device)
+                    targets = batch['label'].to(device).to(torch.long)
 
-                    # Compute and store loss
-                    val_loss = criterion(x_recon, x)
+                    # Get model output
+                    outputs = model(x)
+
+                    # Compute losses
+                    recon_loss      = recon_criterion(outputs['x_recon'], x)
+                    predictive_loss = predictive_criterion(outputs['t_logits'], targets)
+                    val_loss = (1 - lambda_) * recon_loss + lambda_ * predictive_loss
+
+                    # Store losses
                     running_loss_val += val_loss.item()
+                    running_MSELoss_val += recon_loss.item()
+                    running_CELoss_val += predictive_loss.item()
+                
+                    # Compute accuracy
+                    preds = outputs['t_logits'].argmax(axis=1)
+                    equals = preds.cpu().numpy() == targets.cpu().numpy()
+                    running_acc_val += equals.mean()
 
-                # compute the epoch validation loss
-                running_loss_val = running_loss_val / Nval
-            
             # Logging and progress bar update
             t.set_description(
-                f"EPOCH [{epoch + 1}/{epochs}] --> Train loss: {running_loss_train:.4f} | Validation loss: {running_loss_val:.4f} | Progress: "
+                f"EPOCH [{epoch + 1}/{epochs}] --> Train loss: {running_loss_train / Ntrain:.4f} | Validation loss: {running_loss_val / Nval:.4f} | Progress: "
             )
-            writer.add_scalar('loss/train', running_loss_train, epoch)
-            writer.add_scalar('loss/validation', running_loss_val, epoch)
+            writer.add_scalar('A. Total Loss/train', running_loss_train / Ntrain, epoch)
+            writer.add_scalar('A. Total Loss/validation', running_loss_val / Nval, epoch)
+            writer.add_scalar('B. CrossEntropyLoss/train', running_CELoss_train / Ntrain, epoch)
+            writer.add_scalar('B. CrossEntropyLoss/validation', running_CELoss_val / Nval, epoch)
+            writer.add_scalar('C. MSELoss/train', running_MSELoss_train / Ntrain, epoch)
+            writer.add_scalar('C. MSELoss/validation', running_MSELoss_val / Nval, epoch)
+            writer.add_scalar('D. Accuracy/train', running_acc_train / Ntrain, epoch)
+            writer.add_scalar('D. Accuracy/validation', running_acc_val / Nval, epoch)
 
             # Store best epoch
             if running_loss_val < current_best_loss and epoch % checkpoint_every_epoch == 0:
@@ -156,6 +184,11 @@ def train(
                     "seed": seed,
                     "model": {
                         'name': model_name,
+                    },
+                    "data": {
+                        "mu_standardization": mu,
+                        "sigma_standardization": sigma,
+                        "val_size": val_size,
                     },
                     "training_parameters": {
                         "save_path": save_path,
@@ -174,10 +207,12 @@ def train(
 
 if __name__ == '__main__':
 
+    # OBS:! REMEMBER TO CHANGE EXPERIMENT NAME BEFORE RUNNING - OTHERWISE IT WILL OVERWRITE !
+    
     train(
         # Setup
-        model_name              = 'ConvAutoencoder', 
-        experiment_name         = 'ConvAE.lr=1e-3.bz=32',
+        model_name              = 'PredictiveConvAutoencoder', 
+        experiment_name         = 'PredConvAE.lr=1e-4.lambda=0.8.bz=32.seed=42',
         data_path               = 'data',
         save_path               = 'models',
         logs_path               = 'logs',
@@ -188,8 +223,9 @@ if __name__ == '__main__':
         val_size                = 0.2,
 
         # Training parameters
-        batch_size              = 32,
-        lr                      = 1e-3,
+        batch_size              = 64,
+        lr                      = 1e-4,
+        lambda_                 = 0.8,       # weights predictive loss mostly --> higher lambda favors CrossEntropy loss, lower lambda favors reconstruction loss
         epochs                  = 100, 
 
         # Reproducibility parameters

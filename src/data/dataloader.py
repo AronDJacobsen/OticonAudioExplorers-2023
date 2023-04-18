@@ -79,4 +79,4 @@ def get_loaders(
             shuffle=shuffle
         )
         for name_, dataset_ in {'train': train_dataset, 'val': val_dataset, 'test': test_dataset}.items()
-    }
+    }, mu, sigma
