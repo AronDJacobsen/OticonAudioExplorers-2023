@@ -148,6 +148,28 @@ class PredictiveConvAutoencoder(nn.Module):
         return {'x_recon': x_recon, 'z': z, 't_logits': t_logits}
     
 
-class PredictiveEncoder():
-    def __init__(self) -> None:
-        pass
+
+class PredictiveEncoder(nn.Module):
+    def __init__(self):
+        super(PredictiveEncoder, self).__init__()
+        
+        # setup parts
+        self.encoder = nn.Sequential(OrderedDict([
+            ('block1', ConvEncoderBlock(1, 256, kernel_size=3, stride=1, padding=1)),
+            ('block2', ConvEncoderBlock(256, 128, kernel_size=3, stride=1, padding=1)),
+            ('block3', ConvEncoderBlock(128, 64, kernel_size=3, stride=1, padding=1)),
+            ('block4', ConvEncoderBlock(64, 32, kernel_size=3, stride=1, padding=1)),
+        ]))
+        self.encoder_fc = nn.Linear(in_features=32*6*2, out_features=32)        
+        self.latent_classifier = nn.Linear(in_features=32, out_features=5)
+
+    def forward(self, x):
+        # Encode input
+        x_ = self.encoder(x)
+        z = self.encoder_fc(x_.view(x.shape[0], -1))
+
+        # Predict from latent representation
+        t_logits = self.latent_classifier(z)
+    
+        return {'z': z, 't_logits': t_logits}
+    

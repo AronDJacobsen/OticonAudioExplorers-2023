@@ -116,3 +116,5 @@ dtu_mlops/
 *.html
 *.mat
 *.npy
+
+reconstructions/
