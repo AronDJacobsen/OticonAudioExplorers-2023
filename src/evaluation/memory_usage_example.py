@@ -1,5 +1,5 @@
 # importing the library
-from memory_profiler import profile
+from memory_profiler import profile, memory_usage
 
 import numpy as np
 import pandas as pd
@@ -30,10 +30,14 @@ sys.stdout = LogFile('memory_profile_log', reportIncrementFlag=True)
 # instantiating the decorator
 @profile
 def app():
-    temp = np.load('data/raw/training_new.npy')
-    a = np.load("data/raw/training_new.npy")
 
-    del a
+    for _ in range(5):
+
+        temp = np.load('data/raw/npy/training.npy')
+        a = np.load("data/raw/npy/training.npy")
+
+        del a
+
     return temp
 
 if __name__ == '__main__':
