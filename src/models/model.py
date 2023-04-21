@@ -41,8 +41,7 @@ class ConvEncoderBlock(nn.Module):
         )
         self.bn1    = nn.BatchNorm2d(channels_out)
         self.act1   = get_activation(activation)
-        self.pool1  = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout1 = nn.Dropout2d(p=0.2)
+        self.pool1  = nn.AvgPool2d(kernel_size=2, stride=2)
 
     def forward(self, x):
         out = self.conv1(x)

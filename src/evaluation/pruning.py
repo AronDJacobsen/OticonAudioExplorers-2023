@@ -120,7 +120,7 @@ def run_inference_with_computational_metrics(loader, model, device):
     except:
         None
         
-    tracker = EmissionsTracker()
+    tracker = EmissionsTracker(tracking_mode='process')
     
     with torch.no_grad():
         for batch in tqdm(iter(loader)):
@@ -174,13 +174,11 @@ def run_inference_with_computational_metrics(loader, model, device):
 
 
 
-def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 21), batch_size = None): #checkpoint['training_parameters']['batch_size']):
+def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 21), batch_size = None, device = torch.device('cpu')): #checkpoint['training_parameters']['batch_size']):
 
     # Load stored checkpoint
-    checkpoint = torch.load(f'{os.getcwd()}/models/{experiment_name}/best.ckpt') #f'../../models/{experiment_name}/best.ckpt')
+    checkpoint = torch.load(f'models/{experiment_name}/best.ckpt')
     encoder_state_dict = OrderedDict({layer_: weights_ for (layer_, weights_) in checkpoint['state_dict'].items() if 'decoder' not in layer_})
-
-    device = str(checkpoint['training_parameters']['device'])
 
     if batch_size == None:
         batch_size = checkpoint['training_parameters']['batch_size']
@@ -188,7 +186,7 @@ def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 
     # for changing batch_size
     # Load data
     loaders, mu, sigma = get_loaders(
-        data_path = f'{os.getcwd()}/data', #../../data',
+        data_path = 'data',
         balancing_strategy='downsample',
         batch_size = batch_size,
         shuffle=True,
@@ -225,25 +223,38 @@ def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 
         comp_metrics.append(metrics)
 
 
+    N_batches = len(metrics)
+
     # Average duration and memory_usage per batch   
-    tmp = np.array([table[['duration', 'memory_usage', 'cpu_power', 'gpu_power', 'ram_power']].mean() for table in comp_metrics])
+    tmp = np.array([table[['duration', 'memory_usage', 'energy_consumed', 'gpu_power', 'ram_power']].mean() for table in comp_metrics])
+    tmp_sem = np.array([table[['duration', 'memory_usage', 'energy_consumed', 'gpu_power', 'ram_power']].std() / N_batches for table in comp_metrics])
 
     # Creating table
     df = pd.DataFrame()
     df['pruning_ratio'] = pruning_ratios
     df['effective_num_params'] = num_params
     df['duration'] = tmp[:,0]
-    df['cpu_power'] = tmp[:,2]
+    df['energy_consumed'] = tmp[:,2]
     df['memory_usage'] = tmp[:,1]
     df['accuracy'] = accuracy
     df['balanced_acc'] = balanced_acc
     df['precision'] = precision
     df['recall'] = recall
-    
-    return df.T
+
+    # and for errors
+    df_sem = pd.DataFrame()
+    df_sem['pruning_ratio'] = pruning_ratios
+    df_sem['effective_num_params'] = num_params
+    df_sem['duration'] = tmp_sem[:,0]
+    df_sem['energy_consumed'] = tmp_sem[:,2]
+    df_sem['memory_usage'] = tmp_sem[:,1]
+    return df.T, df_sem.T
 
 if __name__ == '__main__':
 
-    df = prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 2), batch_size = None)
-    print(df)
+    df, df_sem = prune_eval(experiment_name = 'final-model', pruning_ratios = np.linspace(0.0, 0.5, 11), batch_size = 16, device = torch.device('cpu'))
+    df.to_csv("pruning_results.csv")
+    df_sem.to_csv("pruning_results_sem.csv")
 
+    print(df)
+    print(df_sem)
