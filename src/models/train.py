@@ -212,7 +212,7 @@ if __name__ == '__main__':
     train(
         # Setup
         model_name              = 'PredictiveConvAutoencoder', 
-        experiment_name         = 'PredConvAE.lr=1e-4.lambda=0.8.bz=32.seed=42',
+        experiment_name         = 'PredConvAE.lr=1e-4.lambda=0.0.bz=64.seed=42.friday_original',
         data_path               = 'data',
         save_path               = 'models',
         logs_path               = 'logs',
@@ -225,7 +225,7 @@ if __name__ == '__main__':
         # Training parameters
         batch_size              = 64,
         lr                      = 1e-4,
-        lambda_                 = 0.8,       # weights predictive loss mostly --> higher lambda favors CrossEntropy loss, lower lambda favors reconstruction loss
+        lambda_                 = 0.0,       # weights predictive loss mostly --> higher lambda favors CrossEntropy loss, lower lambda favors reconstruction loss
         epochs                  = 100, 
 
         # Reproducibility parameters

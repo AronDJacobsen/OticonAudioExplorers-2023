@@ -58,6 +58,9 @@ def get_loaders(
 
     if balancing_strategy == 'downsample':
         Xtrain, ttrain = downsample(Xtrain, ttrain)
+    
+    elif balancing_strategy == 'original':
+        pass
     else:
         raise NotImplementedError("Not yet implemented...")
     
