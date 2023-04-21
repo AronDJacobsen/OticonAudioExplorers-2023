@@ -16,12 +16,12 @@ from src.models.test import predict, run_inference
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.metrics import confusion_matrix, balanced_accuracy_score
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score, recall_score, precision_score
 from codecarbon import EmissionsTracker
 from memory_profiler import memory_usage
 
-def pruning_status(encoder, global_only: bool = False):
-    if not global_only:
+def pruning_status(encoder, global_only: bool = False, do_print = True):
+    if not global_only and do_print:
         print(
             "Sparsity in block1.conv1.weight: {:.2f}%".format(
                 100. * float(torch.sum(encoder.encoder.block1.conv1.weight == 0))
@@ -59,17 +59,7 @@ def pruning_status(encoder, global_only: bool = False):
             )
         )
 
-    print(
-        "Global sparsity: {:.2f}%".format(
-            100. * float(
-                torch.sum(encoder.encoder.block1.conv1.weight == 0)
-                + torch.sum(encoder.encoder.block2.conv1.weight == 0)
-                + torch.sum(encoder.encoder.block3.conv1.weight == 0)
-                + torch.sum(encoder.encoder.block4.conv1.weight == 0)
-                + torch.sum(encoder.encoder_fc.weight == 0)
-                + torch.sum(encoder.latent_classifier.weight == 0)
-            )
-            / float(
+    total_num_params = float(
                 encoder.encoder.block1.conv1.weight.nelement()
                 + encoder.encoder.block2.conv1.weight.nelement()
                 + encoder.encoder.block3.conv1.weight.nelement()
@@ -77,8 +67,26 @@ def pruning_status(encoder, global_only: bool = False):
                 + encoder.encoder_fc.weight.nelement()
                 + encoder.latent_classifier.weight.nelement()
             )
+
+    effective_num_params = float(
+            torch.sum(encoder.encoder.block1.conv1.weight == 0)
+            + torch.sum(encoder.encoder.block2.conv1.weight == 0)
+            + torch.sum(encoder.encoder.block3.conv1.weight == 0)
+            + torch.sum(encoder.encoder.block4.conv1.weight == 0)
+            + torch.sum(encoder.encoder_fc.weight == 0)
+            + torch.sum(encoder.latent_classifier.weight == 0)
         )
-    )
+    
+    if do_print:
+        global_sparsity = (100. * effective_num_params
+                / total_num_params)
+        print(
+            "Global sparsity: {:.2f}%".format(
+                global_sparsity
+            )
+        )
+
+    return total_num_params - effective_num_params
 
 
 def prune_encoder_(encoder_, pruning_ratio):
@@ -99,7 +107,7 @@ def prune_encoder_(encoder_, pruning_ratio):
         amount=pruning_ratio,
     )
     
-    pruning_status(encoder_, global_only=True)
+    return pruning_status(encoder_, global_only=True)
 
 from tqdm import tqdm
 
@@ -190,7 +198,10 @@ def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 
     
     accuracy = [] 
     balanced_acc = []
+    recall = []
+    precision = []
     comp_metrics = []
+    num_params = []
 
     pruning_ratios = pruning_ratios
     for pruning_ratio in pruning_ratios:
@@ -201,13 +212,16 @@ def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 
         encoder_.eval()
 
         # Prune
-        prune_encoder_(encoder_ = encoder_, pruning_ratio = pruning_ratio)
+        effective_num_params = prune_encoder_(encoder_ = encoder_, pruning_ratio = pruning_ratio)
+        num_params.append(effective_num_params)
 
         # Get predictions
         _, pred_val, _, tval, equals_val, metrics  = run_inference_with_computational_metrics(loaders['val'], encoder_, device=device)
 
         accuracy.append(equals_val.sum() / equals_val.__len__())
         balanced_acc.append(balanced_accuracy_score(tval, pred_val))
+        recall.append(recall_score(tval, pred_val, average = 'weighted'))
+        precision.append(precision_score(tval, pred_val, average = 'weighted'))
         comp_metrics.append(metrics)
 
 
@@ -217,12 +231,16 @@ def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 
     # Creating table
     df = pd.DataFrame()
     df['pruning_ratio'] = pruning_ratios
+    df['effective_num_params'] = num_params
     df['duration'] = tmp[:,0]
+    df['cpu_power'] = tmp[:,2]
     df['memory_usage'] = tmp[:,1]
     df['accuracy'] = accuracy
     df['balanced_acc'] = balanced_acc
+    df['precision'] = precision
+    df['recall'] = recall
     
-    return df
+    return df.T
 
 if __name__ == '__main__':
 
