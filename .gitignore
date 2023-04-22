@@ -118,3 +118,4 @@ dtu_mlops/
 *.npy
 
 reconstructions/
+results/

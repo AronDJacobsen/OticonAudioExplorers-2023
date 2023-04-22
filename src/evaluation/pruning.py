@@ -252,8 +252,8 @@ def prune_eval(experiment_name = 'test', pruning_ratios = np.linspace(0.0, 1.0, 
 
 if __name__ == '__main__':
 
-    df, df_sem = prune_eval(experiment_name = 'final-model', pruning_ratios = np.linspace(0.0, 0.5, 11), batch_size = 16, device = torch.device('cpu'))
-    df.to_csv("pruning_results.csv")
+    df, df_sem = prune_eval(experiment_name = 'final-model', pruning_ratios = np.linspace(0.0, 0.5, 11), batch_size = None, device = torch.device('cpu'))
+    df.to_csv("pruning_results10.csv")
     df_sem.to_csv("pruning_results_sem.csv")
 
     print(df)
