@@ -50,7 +50,7 @@ def visualize_utility(ax, U, labels=None):
     ax.set_yticks(np.arange(num_classes))
     
     if labels:
-        ax.set_xticklabels(labels, rotation=25)
+        ax.set_xticklabels(labels, rotation=15)
         ax.set_yticklabels(labels)
     
     ax.grid(False)
@@ -59,16 +59,17 @@ def visualize_utility(ax, U, labels=None):
         ax.text(i,j, val, ha='center', va='center', fontsize=16)
     ax.set_title('Utility matrix', fontweight='bold')
     
-def visualize_confusion_matrix(fig, ax, cm_, reg_type, dtype):
+def visualize_confusion_matrix(fig, ax, cm_, reg_type, dtype, labels=True):
     idx2label   = {0: 'Other', 1: 'Music', 2: 'Human voice', 3: 'Engine sounds', 4: 'Alarm'}
 
     # Plot confusion matrix as heatmap
     sns.heatmap(cm_, annot=True, cmap='Blues', ax=ax)
 
     # Set ticks
-    ticks = list(zip(*[(i + 0.5, name_) for i, name_ in idx2label.items()]))
-    ax.set_xticks(ticks[0], ticks[1], rotation=25)
-    ax.set_yticks(ticks[0], ticks[1], rotation=0)
+    if labels:
+        ticks = list(zip(*[(i + 0.5, name_) for i, name_ in idx2label.items()]))
+        ax.set_xticks(ticks[0], ticks[1], rotation=25)
+        ax.set_yticks(ticks[0], ticks[1], rotation=0)
 
     # Set labels and title
     ax.set_ylabel('True class')

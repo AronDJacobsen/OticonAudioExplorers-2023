@@ -1,9 +1,10 @@
 from tqdm import tqdm
 import torch
 
-def predict(loader, model, device):
+def predict(loader, model, device, output_data=False):
     with torch.no_grad():
         predictions = []
+        data = []
         for batch in tqdm(iter(loader)):
             # Get data from batch
             x       = batch['data'].to(device)
@@ -16,8 +17,12 @@ def predict(loader, model, device):
             preds = logits.argmax(axis=1)
             predictions.append(preds)
 
+            if output_data:
+                # Store data
+                data.append(x)
+
     # Stack latent representations to one frame
-    return torch.hstack(predictions)
+    return torch.hstack(predictions) if not output_data else torch.hstack(predictions), torch.vstack(data)
 
 
 def run_inference(loader, model, device):
