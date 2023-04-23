@@ -11,12 +11,12 @@ def get_activation(activation: str):
     else:
         raise NotImplementedError
 
-def get_model(model_name, lr=1e-3, device=torch.device('cuda' if torch.cuda.is_available else 'cpu')):
+def get_model(model_name, lr=1e-3, latent_dim=32, device=torch.device('cuda' if torch.cuda.is_available else 'cpu')):
     # Initialize model
     if model_name == 'ConvAutoencoder':
-        model = ConvAutoencoder().to(device)
+        model = ConvAutoencoder(latent_dim=latent_dim).to(device)
     elif model_name == 'PredictiveConvAutoencoder':
-        model = PredictiveConvAutoencoder().to(device)
+        model = PredictiveConvAutoencoder(latent_dim=latent_dim).to(device)
     else:
         raise NotImplementedError("This model architecture has not been implemented!!!")
 
@@ -79,7 +79,7 @@ class TransposeConvDecoderBlock(nn.Module):
         return out
     
 class ConvAutoencoder(nn.Module):
-    def __init__(self):
+    def __init__(self, latent_dim=32):
         super(ConvAutoencoder, self).__init__()
         
         # setup parts
@@ -89,9 +89,9 @@ class ConvAutoencoder(nn.Module):
             ('block3', ConvEncoderBlock(128, 64, kernel_size=3, stride=1, padding=1)),
             ('block4', ConvEncoderBlock(64, 32, kernel_size=3, stride=1, padding=1)),
         ]))
-        self.encoder_fc = nn.Linear(in_features=32*6*2, out_features=32)
+        self.encoder_fc = nn.Linear(in_features=32*6*2, out_features=latent_dim)
 
-        self.decoder_fc = nn.Linear(in_features=32, out_features=32*6*2)
+        self.decoder_fc = nn.Linear(in_features=latent_dim, out_features=32*6*2)
         self.decoder = nn.Sequential(OrderedDict([
             ('block1', TransposeConvDecoderBlock(32, 64, kernel_size=2, stride=2)),
             ('block2', TransposeConvDecoderBlock(64, 128, kernel_size=2, stride=2)),
@@ -111,7 +111,7 @@ class ConvAutoencoder(nn.Module):
         return {'x_recon': x_recon, 'z': z}
     
 class PredictiveConvAutoencoder(nn.Module):
-    def __init__(self):
+    def __init__(self, latent_dim=32):
         super(PredictiveConvAutoencoder, self).__init__()
         
         # setup parts
@@ -121,9 +121,9 @@ class PredictiveConvAutoencoder(nn.Module):
             ('block3', ConvEncoderBlock(128, 64, kernel_size=3, stride=1, padding=1)),
             ('block4', ConvEncoderBlock(64, 32, kernel_size=3, stride=1, padding=1)),
         ]))
-        self.encoder_fc = nn.Linear(in_features=32*6*2, out_features=32)
+        self.encoder_fc = nn.Linear(in_features=32*6*2, out_features=latent_dim)
 
-        self.decoder_fc = nn.Linear(in_features=32, out_features=32*6*2)
+        self.decoder_fc = nn.Linear(in_features=latent_dim, out_features=32*6*2)
         self.decoder = nn.Sequential(OrderedDict([
             ('block1', TransposeConvDecoderBlock(32, 64, kernel_size=2, stride=2)),
             ('block2', TransposeConvDecoderBlock(64, 128, kernel_size=2, stride=2)),
@@ -131,7 +131,7 @@ class PredictiveConvAutoencoder(nn.Module):
             ('block4', TransposeConvDecoderBlock(256, 1, kernel_size=2, stride=2, activation=None)),
         ]))
         
-        self.latent_classifier = nn.Linear(in_features=32, out_features=5)
+        self.latent_classifier = nn.Linear(in_features=latent_dim, out_features=5)
 
     def forward(self, x):
         # Encode input
